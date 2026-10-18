@@ -1,0 +1,157 @@
+name: Assemble PAR6 Full Project
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - full-project
+    paths:
+      - ".github/workflows/assemble-full-project.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: assemble-full-project
+  cancel-in-progress: false
+
+jobs:
+  assemble:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out target branch
+        uses: actions/checkout@v4
+        with:
+          ref: full-project
+          fetch-depth: 1
+
+      - name: Fetch upstream projects
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/upstream"
+          git clone --depth 1 https://github.com/Source-Robotics/PAR6-Collaborative-Robot-Arm.git "$RUNNER_TEMP/upstream/PAR6"
+          git clone --depth 1 https://github.com/Source-Robotics/RCB-Robot-Control-Box.git "$RUNNER_TEMP/upstream/RCB"
+          git clone --depth 1 https://github.com/Source-Robotics/STEPFOC-stepper-controller.git "$RUNNER_TEMP/upstream/STEPFOC"
+
+      - name: Rebuild branch from selected project components
+        shell: bash
+        run: |
+          set -euo pipefail
+          PAR6="$RUNNER_TEMP/upstream/PAR6"
+          RCB="$RUNNER_TEMP/upstream/RCB"
+          STEPFOC="$RUNNER_TEMP/upstream/STEPFOC"
+
+          # Replace branch contents while preserving this reusable workflow.
+          find . -mindepth 1 -maxdepth 1 ! -name .git ! -name .github -exec rm -rf -- {} +
+
+          # Core PAR6 mechanical, assembly, BOM, photo, safety and beta documentation.
+          cp -a "$PAR6/3D Print Files" .
+          cp -a "$PAR6/Assembly manual" .
+          cp -a "$PAR6/BOM" .
+          cp -a "$PAR6/PAR6 Description" .
+          cp -a "$PAR6/Photos" .
+          cp "$PAR6/LICENSE" LICENSE
+          cp "$PAR6/SAFETY_WARNING_AND_DISCLAIMER.md" .
+          cp "$PAR6/beta_guide.md" .
+
+          # RCB control-box hardware and complete motherboard firmware source.
+          RCB_OUT="Integrated Components/RCB-Robot-Control-Box"
+          mkdir -p "$RCB_OUT"
+          cp -a "$RCB/RCB motherboard firmware" "$RCB_OUT/"
+          cp -a "$RCB/STEP files" "$RCB_OUT/"
+          cp -a "$RCB/BOM" "$RCB_OUT/"
+          cp -a "$RCB/Assembly manual" "$RCB_OUT/"
+          cp -a "$RCB/Photos" "$RCB_OUT/"
+          cp "$RCB/README.md" "$RCB_OUT/README.md"
+          cp "$RCB/LICENSE" "$RCB_OUT/LICENSE-MIT"
+          cp "$RCB/SAFETY_WARNING_AND_DISCLAIMER.md" "$RCB_OUT/"
+
+          # STEPFOC source, build configuration, firmware binary and CAD files.
+          STEP_OUT="Integrated Components/STEPFOC-stepper-controller"
+          mkdir -p "$STEP_OUT"
+          cp -a "$STEPFOC/STEPFOC firmware" "$STEP_OUT/"
+          cp -a "$STEPFOC/STEP files" "$STEP_OUT/"
+          cp -a "$STEPFOC/Binaries" "$STEP_OUT/"
+          cp -a "$STEPFOC/Photos" "$STEP_OUT/"
+          cp "$STEPFOC/STEPFOC firmware.zip" "$STEP_OUT/"
+          cp "$STEPFOC/README.md" "$STEP_OUT/README.md"
+          cp "$STEPFOC/LICENSE" "$STEP_OUT/LICENSE-GPL-3.0"
+
+          # Preserve distinct upstream license texts and attribution.
+          mkdir -p LICENSES
+          cp "$PAR6/LICENSE" "LICENSES/PAR6-CERN-OHL-S-2.0.txt"
+          cp "$RCB/LICENSE" "LICENSES/RCB-MIT.txt"
+          cp "$RCB/RCB motherboard firmware/LICENSE" "LICENSES/RCB-firmware-GPL-3.0.txt"
+          cp "$STEPFOC/LICENSE" "LICENSES/STEPFOC-GPL-3.0.txt"
+
+          cat > LICENSES/README.md <<'EOF'
+          # Third-party licenses and attribution
+
+          This repository combines independently licensed upstream projects. The root LICENSE applies to the PAR6 project materials as specified by the PAR6 upstream project; it does not replace licenses in Integrated Components.
+
+          - PAR6 Collaborative Robot Arm — CERN Open Hardware Licence Version 2, Strongly Reciprocal (CERN-OHL-S-2.0). See PAR6-CERN-OHL-S-2.0.txt.
+          - RCB Robot Control Box project files — MIT License. See RCB-MIT.txt.
+          - RCB motherboard firmware — GNU GPL version 3. See RCB-firmware-GPL-3.0.txt and the firmware directory's own LICENSE.
+          - STEPFOC stepper controller — GNU GPL version 3. See STEPFOC-GPL-3.0.txt and the component's own license file.
+          - Bundled I2C EEPROM library and other third-party materials retain their own notices where included.
+
+          Upstream projects:
+          - https://github.com/Source-Robotics/PAR6-Collaborative-Robot-Arm
+          - https://github.com/Source-Robotics/RCB-Robot-Control-Box
+          - https://github.com/Source-Robotics/STEPFOC-stepper-controller
+
+          Review the relevant license and notices before redistributing modified hardware, firmware, binaries, or documentation.
+          EOF
+
+          cat > README.md <<'EOF'
+          # PAR6 Collaborative Robot Arm — Full Project
+
+          This branch assembles the PAR6 robot-arm project with its related RCB control box and STEPFOC stepper-controller resources.
+
+          > CAUTION: PAR6 is a beta, development-stage project. This repository is not a claim of collaborative-robot safety certification. Do not operate near people until the complete machine, control system, risk assessment, protective measures, and emergency-stop behavior have been independently validated for the intended application.
+
+          ## Repository map
+
+          - 3D Print Files/ — PAR6 printable parts, CAD exports and print references.
+          - Assembly manual/ — PAR6 assembly, wiring and supporting datasheets.
+          - BOM/ — PAR6 bill of materials and reference images.
+          - PAR6 Description/ — PAR6 project documentation.
+          - Photos/ — PAR6 project images.
+          - Integrated Components/RCB-Robot-Control-Box/ — RCB motherboard firmware source, STEP models, BOM, assembly notes, photos and upstream documentation.
+          - Integrated Components/STEPFOC-stepper-controller/ — STEPFOC firmware source and build configuration, firmware binary, STEP models, photos and upstream documentation.
+          - LICENSES/ — license copies and component attribution.
+
+          ## Firmware and hardware notes
+
+          - RCB motherboard firmware and STEPFOC firmware remain separate projects; they are not merged into one firmware image.
+          - STEPFOC includes source and a prebuilt binary. Verify hardware revision and firmware compatibility before flashing.
+          - Check each component README, build configuration, wiring instructions and license before use.
+          - Integrated Components is a curated copy of upstream component materials, not a claim that the integration has been tested as a complete robot system.
+
+          ## Safety
+
+          Read SAFETY_WARNING_AND_DISCLAIMER.md and beta_guide.md before assembly or operation. Validate grounding, power distribution, emergency stop, communications-loss behavior, motion limits, guarding and mechanical stability. Test at low speed with the workspace secured. Never rely on software alone as a personnel-protection measure.
+
+          ## Licensing and attribution
+
+          This is a multi-license repository. PAR6 hardware files are under CERN-OHL-S-2.0; RCB project files include MIT-licensed materials while its motherboard firmware carries a GPL-3.0 license; STEPFOC is GPL-3.0. See LICENSES/ and the original license files retained beside each component. The root license does not override a component's license.
+
+          ## Upstream sources
+
+          - PAR6 Collaborative Robot Arm: https://github.com/Source-Robotics/PAR6-Collaborative-Robot-Arm
+          - RCB Robot Control Box: https://github.com/Source-Robotics/RCB-Robot-Control-Box
+          - STEPFOC Stepper Controller: https://github.com/Source-Robotics/STEPFOC-stepper-controller
+
+          Upstream projects may change. This branch is a snapshot taken when the assembly workflow ran; rerun Assemble PAR6 Full Project from the Actions tab to refresh it.
+          EOF
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git commit -m "Assemble PAR6 full project with RCB and STEPFOC"
+          git push origin HEAD:full-project
